@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4d0143e7dd845d04e89f26ca7b08ec38, type: 3}
+  m_Name: New SSR Module
+  m_EditorClassIdentifier: 
+  moduleName: 
+  enabled: 1
+  LayerMask:
+    serializedVersion: 2
+    m_Bits: 0
+  lightingData: 0
+  maxLightsCount: 0
+  lightBufferName: LIGHT_BUFFER
+  lightCountPropertyName: LIGHT_COUNT
+  customCulling: 0
+  customCuller: {fileID: 0}
+  SSRCompute: {fileID: 7200000, guid: 490ab359936d1f94eb389b56a519f522, type: 3}
+  container: {fileID: 11400000, guid: 451a384e6b490ed4da87dcce44fd0a5a, type: 2}
+  reflectionBuffer: {fileID: 0}
+  blurBuffer: {fileID: 0}
+  result: {fileID: 0}
+  maxIterations: 64
+  screenFade: 0
+  reflectionDistance: 4
+  objectThickness: 0.3
+  randomizeStartingPoint: 1
+  quality: 1

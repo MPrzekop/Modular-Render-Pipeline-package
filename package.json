@@ -1,0 +1,14 @@
+{
+  "name": "com.przekop.modular_srp",
+  "version": "0.0.1",
+  "displayName": "Modular render pipeline",
+  "description": "",
+  "dependencies": {
+    "com.unity.render-pipelines.core": "10.7.0"
+  },
+  "hideInEditor": false,
+  "author": {
+    "name": "Michał Przekop",
+    "email": "przekop.michal@gmail.com"
+  }
+}

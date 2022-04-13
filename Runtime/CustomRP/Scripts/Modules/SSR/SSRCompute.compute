@@ -1,0 +1,191 @@
+#pragma kernel CSMain
+#pragma kernel Blur
+#pragma kernel Merge
+#pragma multi_compile _ RANDOM_STARTING_POINT
+#pragma multi_compile _ HALF_RES_SAMPLE QUARTER_RES_SAMPLE
+#include <UnityShaderVariables.cginc>
+float maxIterations;
+float screenEdgeFade = 0.1;
+float reflectionDistance = 5;
+float objectThickness = 0.1;
+int screenWidth, screenHeight;
+float3 cameraPosition;
+float4x4 worldToViewMatrix;
+Texture2D<float4> MADS;
+Texture2D<float4> normals;
+Texture2D<float4> position;
+Texture2D<float4> color;
+Texture2D<float> depth;
+RWTexture2D<float4> Result;
+
+struct Ray
+{
+    float3 origin, direction;
+};
+
+
+float nrand(float2 uv)
+{
+    return frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453) * 2 - 1;
+}
+
+float4 blur13(int2 uv, float kernelMult, Texture2D<float4> tex)
+{
+    float4 res = tex[uv];
+    float weights = 0;
+    for (int i = -3; i <= 3; i++)
+    {
+        for (int j = -3; j <= 3; j++)
+        {
+            res += tex[uv + float2(i, j) * kernelMult];
+            weights += 1;
+        }
+    }
+    if (weights == 0)return 0;
+    return res / (weights);
+}
+
+float4 blur13(int2 uv, float kernelMult, RWTexture2D<float4> tex)
+{
+    float4 res;
+    float weights = 0;
+    for (int i = -kernelMult; i < kernelMult; i++)
+    {
+        for (int j = -kernelMult; j < kernelMult; j++)
+        {
+            res += tex[uv + float2(i, j)];
+            weights += length(tex[uv + float2(i, j)]);
+        }
+    }
+    if (weights == 0)
+    {
+        return 0;
+    }
+    return res / (weights);
+}
+
+float blur13(int2 uv, float kernelMult, Texture2D<float> tex)
+{
+    float res = tex[uv];
+    for (int i = -kernelMult; i < kernelMult; i++)
+    {
+        for (int j = -kernelMult; j < kernelMult; j++)
+        {
+            res += tex[uv + float2(i, j)];
+        }
+    }
+    return res / (1 + kernelMult * kernelMult);
+}
+
+[numthreads(8,8,1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+    uint2 coords = id.xy;
+    #if HALF_RES_SAMPLE
+     coords = id.xy*2;
+    #endif
+    #if QUARTER_RES_SAMPLE
+    coords = id.xy*4;
+    #endif
+
+
+    float4 viewSpacePosition = mul(UNITY_MATRIX_V, float4(position[coords].xyz, 1));
+    //0-1 range
+
+    float4 viewSpaceNormals = (mul(UNITY_MATRIX_V, float4(normals[coords].xyz, 0)));
+    //viewSpaceNormals.xyz/=viewSpaceNormals.w;
+    float3 cameraRayDirection = normalize(viewSpacePosition);
+    Ray ray;
+    ray.origin = viewSpacePosition;
+    Result[id.xy] = 0;
+    ray.direction = normalize(reflect(cameraRayDirection, lerp((viewSpaceNormals.xyz +
+                                                                   float3(nrand(viewSpacePosition.xy),
+                                                                          nrand(viewSpacePosition.xy +
+                                                                              viewSpacePosition
+                                                                              .z), nrand(
+                                                                              viewSpacePosition.xy -
+                                                                              viewSpacePosition.
+                                                                              z)) * (1 - MADS[coords].a) *
+                                                                   (1 - MADS[
+                                                                       coords].a) * 0.2),
+                                                               viewSpaceNormals.xyz, MADS[coords].a)));
+
+    int maxIter = maxIterations * MADS[id.xy].a;
+
+    float stepSize = reflectionDistance / maxIter;
+    float3 currentPosition = ray.origin + ray.direction * stepSize;
+    #if RANDOM_STARTING_POINT
+        currentPosition+= ray.direction*abs(nrand(viewSpacePosition.xy))*stepSize;
+    #endif
+    float4 screenSpacePos = mul(UNITY_MATRIX_P, float4(currentPosition, 1));
+    screenSpacePos.xyz /= screenSpacePos.w;
+    screenSpacePos.xy = screenSpacePos.xy * 0.5 + 0.5;
+    screenSpacePos.y = 1 - screenSpacePos.y;
+    for (int i = 0; i < maxIter; i++)
+    {
+        screenSpacePos = mul(UNITY_MATRIX_P, float4(currentPosition, 1));
+        screenSpacePos.xyz /= screenSpacePos.w;
+        screenSpacePos.xy = screenSpacePos.xy * 0.5 + 0.5;
+        screenSpacePos.y = 1 - screenSpacePos.y;
+        if (screenSpacePos.x < 0 || screenSpacePos.y < 0 || screenSpacePos.x > 1 || screenSpacePos.y > 1)
+        {
+            Result[id.xy] += 0;
+            break;
+        }
+        float currentDepth = mul(UNITY_MATRIX_V,
+                                 float4(
+                                     position[screenSpacePos * float2(screenWidth, screenHeight)].xyz,
+                                     1)).z;
+        float diff = currentDepth - currentPosition.z;
+
+        if (diff >= 0.0 && abs(diff) < objectThickness)
+        {
+            float edgeFade =
+                saturate(1 - saturate(abs(length(screenSpacePos.xy - 0.5) * 2) - (1 - screenEdgeFade)));
+
+            Result[id.xy] += color[screenSpacePos * float2(screenWidth, screenHeight)]
+                * edgeFade;
+
+            break;
+        }
+
+        currentPosition += ray.direction * stepSize;
+        //stepSize+=0.0025;
+    }
+}
+
+
+[numthreads(8,8,1)]
+void Blur(uint3 id : SV_DispatchThreadID)
+{
+    float2 coords = id.xy;
+    #if HALF_RES_SAMPLE
+    coords = id.xy*2;
+    #endif
+    #if QUARTER_RES_SAMPLE
+    coords = id.xy*4;
+    #endif
+    Result[id.xy] = (color[id.xy] * 2 + color[id.xy + int2(1, 0)] + color[id.xy + int2(0, 1)] + color[id.xy +
+        int2(-1, 0)] + color[id.xy + int2(0, -1)]) / 6;
+}
+
+Texture2D<float4> reflections;
+
+[numthreads(8,8,1)]
+void Merge(uint3 id : SV_DispatchThreadID)
+{
+    float2 coords = id.xy;
+    float step = 5;
+    #if HALF_RES_SAMPLE
+    coords = id.xy/2.0;
+    step/=2;
+    #endif
+    #if QUARTER_RES_SAMPLE
+    coords = id.xy/4.0;
+    step/=4;
+    #endif
+    float roughness = (1 - MADS[id.xy].a) * (1 - MADS[id.xy].a);
+    Result[id.xy] = blur13(coords, step * roughness, reflections) * (1 - roughness)
+        + color[id.xy];
+}

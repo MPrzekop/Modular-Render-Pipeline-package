@@ -1,0 +1,49 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float> ShadowMap;
+RWTexture2D<float> target;
+static const int kernelSampleCount = 16;
+static const float2 kernel[16] = {
+    float2(0, 0),
+    float2(0.54545456, 0),
+    float2(0.16855472, 0.5187581),
+    float2(-0.44128203, 0.3206101),
+    float2(-0.44128197, -0.3206102),
+    float2(0.1685548, -0.5187581),
+    float2(1, 0),
+    float2(0.809017, 0.58778524),
+    float2(0.30901697, 0.95105654),
+    float2(-0.30901703, 0.9510565),
+    float2(-0.80901706, 0.5877852),
+    float2(-1, 0),
+    float2(-0.80901694, -0.58778536),
+    float2(-0.30901664, -0.9510566),
+    float2(0.30901712, -0.9510565),
+    float2(0.80901694, -0.5877853),
+};
+
+float blur13(int2 uv, float kernelMult)
+{
+    float val;
+    for (int k = 0; k < kernelSampleCount; k++)
+    {
+        float2 o = kernel[k];
+        o *=kernelMult;
+        val += ShadowMap[uv + o];
+    }
+    val *= 1.0 / kernelSampleCount;
+    return val;
+}
+
+[numthreads(16,16,1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+    if (id.x == 0 || id.y == 0)return;
+    if(ShadowMap[id.xy]==0)return;
+    ShadowMap[id.xy] =blur13(id.xy, ShadowMap[id.xy]*10);
+    
+}

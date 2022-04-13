@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fa5c0bea91b0ac14b93ccab3b7c2b6a6, type: 3}
+  m_Name: CustomRP
+  m_EditorClassIdentifier: 
+  modules:
+  - {fileID: 11400000, guid: 2c0283224361ce5408a14592c71ff793, type: 2}
+  - {fileID: 11400000, guid: 0ea170012537c09418471d0e1904c3d5, type: 2}
+  - {fileID: 11400000, guid: 16f0e0ca623bb4f46bf3df5eb4abb156, type: 2}
+  - {fileID: 11400000, guid: 2a87d2344798f8d46ab7d8cb77f2c510, type: 2}
+  - {fileID: 11400000, guid: 438a2095c8ab3fd4c8f40b3ae34fba21, type: 2}
+  - {fileID: 11400000, guid: 4c322771533e293459a89c238fec603e, type: 2}
+  - {fileID: 11400000, guid: df1d20eee0ae39c48badc1e01adde94b, type: 2}
+  - {fileID: 11400000, guid: a8b53d16b015d0747a25b8ab7ef80598, type: 2}
