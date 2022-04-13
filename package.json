@@ -1,6 +1,6 @@
 {
   "name": "com.przekop.modular_srp",
-  "version": "0.0.2022.04.12",
+  "version": "0.0.2",
   "displayName": "Modular render pipeline",
   "description": "",
   "dependencies": {
