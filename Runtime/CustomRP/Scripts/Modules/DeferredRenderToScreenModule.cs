@@ -36,7 +36,7 @@ public class DeferredRenderToScreenModule : RPModule
     void RenderToScreen(ScriptableRenderContext context, Camera camera, CommandBuffer buffer)
     {
         //render to screen with depth copy
-        
+        CameraRendererUtility.SetupCameraMatrices(camera, buffer, context);
         if (shadowmaskMaterial == null)
         {
             shadowmaskMaterial = new Material(Shader.Find("Unlit/RenderScreenSpaceShadows"));
@@ -57,11 +57,13 @@ public class DeferredRenderToScreenModule : RPModule
             shadowmaskBuffer2.enableRandomWrite = true;
             shadowmaskBuffer2.Create();
         }
+
         CustomLight[] Nlights = (CustomLight[]) customCuller.Cull(context);
         if (lightsData == null || lightsData.Length != maxLightsCount)
         {
             lightsData = new BlittableLight[maxLightsCount];
         }
+
         if (maxLightsCount == 0) return;
         if (lightsBuffer == null || lightsBuffer.count != maxLightsCount)
         {
@@ -77,7 +79,6 @@ public class DeferredRenderToScreenModule : RPModule
         lightsBuffer.SetData(lightsData);
         Shader.SetGlobalBuffer(lightBufferName, lightsBuffer);
         Shader.SetGlobalInt(lightCountPropertyName, Mathf.Min(maxLightsCount, Nlights.Length));
-        
         if (lightingData && maxLightsCount > 0 && Nlights.Length > 0)
         {
             var tempRenderTexture = new RenderTexture[]
@@ -94,7 +95,7 @@ public class DeferredRenderToScreenModule : RPModule
             CoreUtils.ClearRenderTarget(buffer, ClearFlag.All, Color.black);
             ExecuteBuffer(context, buffer);
             int lastIndex = 0;
-           
+
             for (int i = 0; i < Mathf.Min(maxLightsCount, Nlights.Length); i++)
             {
                 buffer.SetGlobalInt("LIGHT_ID", i);
@@ -138,6 +139,8 @@ public class DeferredRenderToScreenModule : RPModule
 
             context.SetupCameraProperties(camera);
             ExecuteBuffer(context, buffer);
+            context.SetupCameraProperties(camera);
+
             CoreUtils.SetRenderTarget(buffer, CameraRendererUtility.frameBufferId);
             buffer.Blit(tempRenderTexture[lastIndex], CameraRendererUtility.frameBufferId);
             ExecuteBuffer(context, buffer);
@@ -148,6 +151,8 @@ public class DeferredRenderToScreenModule : RPModule
         }
         else
         {
+            context.SetupCameraProperties(camera);
+
             buffer.Blit(_bufferContainer.colors[0], CameraRendererUtility.frameBufferId,
                 LightingMaterial);
         }

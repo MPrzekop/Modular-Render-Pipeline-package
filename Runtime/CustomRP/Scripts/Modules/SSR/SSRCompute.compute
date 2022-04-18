@@ -17,10 +17,33 @@ Texture2D<float4> position;
 Texture2D<float4> color;
 Texture2D<float> depth;
 RWTexture2D<float4> Result;
+float4x4 MY_UNITY_MATRIX_V, MY_UNITY_MATRIX_P, MY_UNITY_MATRIX_I_V;
+
+static const int kernelSampleCount = 16;
+static const float2 kernel[kernelSampleCount] = {
+    float2(0, 0),
+    float2(0.54545456, 0),
+    float2(0.16855472, 0.5187581),
+    float2(-0.44128203, 0.3206101),
+    float2(-0.44128197, -0.3206102),
+    float2(0.1685548, -0.5187581),
+    float2(1, 0),
+    float2(0.809017, 0.58778524),
+    float2(0.30901697, 0.95105654),
+    float2(-0.30901703, 0.9510565),
+    float2(-0.80901706, 0.5877852),
+    float2(-1, 0),
+    float2(-0.80901694, -0.58778536),
+    float2(-0.30901664, -0.9510566),
+    float2(0.30901712, -0.9510565),
+    float2(0.80901694, -0.5877853),
+};
+
+
 
 struct Ray
 {
-    float3 origin, direction;
+    float3 origin, direction, end;
 };
 
 
@@ -64,6 +87,18 @@ float4 blur13(int2 uv, float kernelMult, RWTexture2D<float4> tex)
     return res / (weights);
 }
 
+half4 blur (Texture2D<float4> tex,float2 uv,float mult)  {
+    half3 color = 0;
+    
+    for (int k = 0; k < kernelSampleCount; k++) {
+        float2 o = kernel[k];
+        o *=  mult;
+        color += tex[uv+o];
+    }
+    color *= 1.0 / kernelSampleCount;
+    return half4(color, 1);
+}
+
 float blur13(int2 uv, float kernelMult, Texture2D<float> tex)
 {
     float res = tex[uv];
@@ -77,10 +112,92 @@ float blur13(int2 uv, float kernelMult, Texture2D<float> tex)
     return res / (1 + kernelMult * kernelMult);
 }
 
+
+float4 ConvertToScreenSpace(float4 viewSpacePosition)
+{
+    float4 startScreenSpace = mul(MY_UNITY_MATRIX_P, viewSpacePosition);
+    startScreenSpace.xyz /= startScreenSpace.w;
+    startScreenSpace.xy = startScreenSpace.xy * 0.5 + 0.5;
+    #if UNITY_UV_STARTS_AT_TOP
+    startScreenSpace.y = 1 - startScreenSpace.y;
+
+    #else
+    #endif
+    return startScreenSpace;
+}
+
+float4 PerspecitveInterpolation(float4 a, float4 b, float t)
+{
+    //t = clamp(t, 0, 1);
+    return (a * b) / lerp(b, a, t);
+}
+
+float3 PerspecitveInterpolation(float3 a, float3 b, float t)
+{
+    //t = clamp(t, 0, 1);
+    return (a * b) / lerp(b, a, t);
+}
+
+float4 GetReflection(Ray ray,uint2 id)
+{
+    int maxIter = maxIterations * MADS[id.xy].a;
+float4 res = 0;
+    float stepSize = reflectionDistance / maxIter;
+    float3 currentPosition = ray.origin + ray.direction * stepSize;
+    
+
+
+    float4 screenSpaceStartPos = ConvertToScreenSpace(float4(ray.origin, 1));
+    float4 screenSpaceEndPos = ConvertToScreenSpace(float4(ray.end, 1));
+
+
+    float2 pixelPosStart = screenSpaceStartPos.xy * float2(screenWidth, screenHeight);
+    float2 pixelPosEnd = screenSpaceEndPos.xy * float2(screenWidth, screenHeight);
+
+    float2 step = normalize(pixelPosEnd - pixelPosStart);
+
+    float rayPixelLength = max(1,length(pixelPosEnd - pixelPosStart));
+    int iter = ceil(min(max(1, rayPixelLength),500));
+    float2 currentPixelPos = pixelPosStart ;
+    int hit = 0;
+ 
+    if(ray.end.z>=0)
+    {
+        res=0;
+        return res;
+    }
+   
+    for (int i = 0; i < iter; i += maxIterations)
+    {
+        currentPixelPos += step * maxIterations;
+        //currentPixelPos= ceil(currentPixelPos);
+        float2 screenUV = currentPixelPos / float2(screenWidth, screenHeight);
+        if (screenUV.x < 0 || screenUV.y < 0 || screenUV.x > 1 || screenUV.y > 1)
+        {
+            res = 1;
+            break;
+        }
+        float currentDepth = position[currentPixelPos].z;
+        float rayDepth = PerspecitveInterpolation(ray.origin, ray.end, i / rayPixelLength).z;
+
+        float diff = currentDepth - rayDepth;
+
+        if (diff > 0.01 && diff < objectThickness )
+        {
+            hit = 1;
+            res = color[currentPixelPos];
+            break;
+        }
+    }
+    if (hit == 0)
+    {
+        res = 0;
+    }
+    return res;
+}
 [numthreads(8,8,1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
-    // TODO: insert actual code here!
     uint2 coords = id.xy;
     #if HALF_RES_SAMPLE
      coords = id.xy*2;
@@ -90,69 +207,199 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     #endif
 
 
-    float4 viewSpacePosition = mul(UNITY_MATRIX_V, float4(position[coords].xyz, 1));
+    float4 viewSpacePosition = position[coords];
+    // Result[id.xy]= viewSpacePosition.z;
+    // return;
     //0-1 range
 
-    float4 viewSpaceNormals = (mul(UNITY_MATRIX_V, float4(normals[coords].xyz, 0)));
+    float4 viewSpaceNormals = normals[coords];
     //viewSpaceNormals.xyz/=viewSpaceNormals.w;
     float3 cameraRayDirection = normalize(viewSpacePosition);
     Ray ray;
     ray.origin = viewSpacePosition;
     Result[id.xy] = 0;
-    ray.direction = normalize(reflect(cameraRayDirection, lerp((viewSpaceNormals.xyz +
-                                                                   float3(nrand(viewSpacePosition.xy),
-                                                                          nrand(viewSpacePosition.xy +
-                                                                              viewSpacePosition
-                                                                              .z), nrand(
-                                                                              viewSpacePosition.xy -
-                                                                              viewSpacePosition.
-                                                                              z)) * (1 - MADS[coords].a) *
-                                                                   (1 - MADS[
-                                                                       coords].a) * 0.2),
-                                                               viewSpaceNormals.xyz, MADS[coords].a)));
-
-    int maxIter = maxIterations * MADS[id.xy].a;
-
-    float stepSize = reflectionDistance / maxIter;
-    float3 currentPosition = ray.origin + ray.direction * stepSize;
-    #if RANDOM_STARTING_POINT
-        currentPosition+= ray.direction*abs(nrand(viewSpacePosition.xy))*stepSize;
-    #endif
-    float4 screenSpacePos = mul(UNITY_MATRIX_P, float4(currentPosition, 1));
-    screenSpacePos.xyz /= screenSpacePos.w;
-    screenSpacePos.xy = screenSpacePos.xy * 0.5 + 0.5;
-    screenSpacePos.y = 1 - screenSpacePos.y;
-    for (int i = 0; i < maxIter; i++)
+    if((MADS[coords].a)<0.4)return;
+    int maxIter = 1+16*(1-MADS[coords].a);
+    for(int i = 0;i<maxIter;i++)
     {
-        screenSpacePos = mul(UNITY_MATRIX_P, float4(currentPosition, 1));
-        screenSpacePos.xyz /= screenSpacePos.w;
-        screenSpacePos.xy = screenSpacePos.xy * 0.5 + 0.5;
-        screenSpacePos.y = 1 - screenSpacePos.y;
-        if (screenSpacePos.x < 0 || screenSpacePos.y < 0 || screenSpacePos.x > 1 || screenSpacePos.y > 1)
-        {
-            Result[id.xy] += 0;
-            break;
-        }
-        float currentDepth = mul(UNITY_MATRIX_V,
-                                 float4(
-                                     position[screenSpacePos * float2(screenWidth, screenHeight)].xyz,
-                                     1)).z;
-        float diff = currentDepth - currentPosition.z;
-
-        if (diff >= 0.0 && abs(diff) < objectThickness)
-        {
-            float edgeFade =
-                saturate(1 - saturate(abs(length(screenSpacePos.xy - 0.5) * 2) - (1 - screenEdgeFade)));
-
-            Result[id.xy] += color[screenSpacePos * float2(screenWidth, screenHeight)]
-                * edgeFade;
-
-            break;
-        }
-
-        currentPosition += ray.direction * stepSize;
-        //stepSize+=0.0025;
+        ray.direction = normalize(reflect(cameraRayDirection, lerp((viewSpaceNormals.xyz +
+                                                                       float3(nrand(viewSpacePosition.xy+float2(i,i)),
+                                                                              nrand(viewSpacePosition.xy +
+                                                                                  viewSpacePosition
+                                                                                  .z+float2(i,i)), nrand(
+                                                                                  viewSpacePosition.xy -
+                                                                                  viewSpacePosition.
+                                                                                  z+float2(i,i))) * (1 - MADS[coords].a) *
+                                                                       (1 - MADS[
+                                                                           coords].a) * 1),
+                                                                   viewSpaceNormals.xyz, MADS[coords].a)));
+        //  ray.direction=normalize(reflect(cameraRayDirection, ((viewSpaceNormals.xyz))));
+        #if RANDOM_STARTING_POINT
+            ray.origin+= ray.direction*abs(nrand(viewSpacePosition.xy+float2(i,-i)))*0.3f;
+        #endif
+        ray.end = ray.origin + ray.direction * reflectionDistance;
+        Result[id.xy]+=GetReflection(ray,id.xy);
     }
+    Result[id.xy]/=maxIter;
+    
+    // if (ray.end.z > 0)
+    // {
+    //     float ratio = (-UNITY_NEAR_CLIP_VALUE - ray.origin.z) / (ray.end.z - ray.origin.z);
+    //     ray.end = (ray.origin) + (ray.direction * reflectionDistance * ratio);
+    // }
+    
+    // float4 screenSpacePos = mul(MY_UNITY_MATRIX_P, float4(currentPosition, 1));
+    // screenSpacePos.xyz /= screenSpacePos.w;
+    // screenSpacePos.xy = screenSpacePos.xy * 0.5 + 0.5;
+    // screenSpacePos.y = 1 - screenSpacePos.y;
+    //
+    //
+    // for (int i = 0; i < maxIter; i++)
+    // {
+    //     screenSpacePos = mul(MY_UNITY_MATRIX_P, float4(currentPosition, 1));
+    //     screenSpacePos.xyz /= screenSpacePos.w;
+    //     screenSpacePos.xy = screenSpacePos.xy * 0.5 + 0.5;
+    //     screenSpacePos.y = 1 - screenSpacePos.y;
+    //     if (screenSpacePos.x < 0 || screenSpacePos.y < 0 || screenSpacePos.x > 1 || screenSpacePos.y > 1 ||
+    //         currentPosition.z > 0)
+    //     {
+    //         Result[id.xy] += 0;
+    //         break;
+    //     }
+    //     float currentDepth = position[screenSpacePos * float2(screenWidth, screenHeight)].z;
+    //     float diff = currentDepth - currentPosition.z;
+    //
+    //     if (diff >= 0.0 && abs(diff) < objectThickness)
+    //     {
+    //         float edgeFade =
+    //             saturate(1 - saturate(abs(length(screenSpacePos.xy - 0.5) * 2) - (1 - screenEdgeFade)));
+    //
+    //         Result[id.xy] += color[screenSpacePos * float2(screenWidth, screenHeight)]
+    //             * edgeFade;
+    //
+    //         break;
+    //     }
+    //
+    //     currentPosition += ray.direction * stepSize;
+    //     //stepSize+=0.0025;
+    // }
+
+    // float4 viewSpacePosition = mul(UNITY_MATRIX_V, float4(position[coords].xyz, 1));
+    //
+    //
+    // float4 viewSpaceNormals = normalize(mul(UNITY_MATRIX_V, float4(normals[coords].xyz, 0)));
+    // //viewSpaceNormals.xyz/=viewSpaceNormals.w;
+    // //if(length(viewSpaceNormals)==0)return;
+    // Ray ray;
+    // ray.origin = viewSpacePosition;
+    // ray.direction = normalize(reflect(normalize(viewSpacePosition.xyz), viewSpaceNormals.xyz));
+    //
+    // Result[id.xy] = 0;
+    // float4 startView = float4(ray.origin.xyz, 1);
+    // float4 startPosition = mul(UNITY_MATRIX_P, startView);
+    // startPosition.xyz /= startPosition.w;
+    // startPosition.xy = startPosition.xy * 0.5 + 0.5;
+    // startPosition.xy = float2(startPosition.x, 1 - startPosition.y);
+    // //startPosition.xy *= float2(screenWidth, screenHeight);
+    // // Result[id.xy]= float4(ray.origin,1);
+    // // return;
+    // float4 endView = float4(startView.xyz + ray.direction * reflectionDistance, 1);
+    //
+    //
+    // float4 endPosition = mul(UNITY_MATRIX_P, float4(endView.xyz, 1));
+    // // endPosition.w = clamp(endPosition.w,-100000,-0.0001);
+    //
+    // endPosition.xyz /= endPosition.w;
+    // endPosition.xy = endPosition.xy * 0.5 + 0.5;
+    // // Result[id.xy]= float4(endPosition.xy,0,1);
+    // // return;
+    // endPosition.xy = float2(endPosition.x, 1 - endPosition.y);
+    // //
+    // endPosition.xy *= float2(screenWidth, screenHeight);
+    // Result[id.xy] = color[endPosition.xy];
+    // return;
+    //
+    //
+    // //TODO: fix end position calculation
+    // float2 delta = endPosition.xy - startPosition.xy;
+    //
+    // float maxSteps = max(min(length(delta), reflectionDistance * screenWidth), 1);
+    //
+    //
+    // for (int i = 0; i < (int)maxSteps; i ++)
+    // {
+    //     float2 currentScreenPos = lerp(startPosition.xy, endPosition.xy, (float)i / maxSteps);
+    //     float2 screenSpacePos = currentScreenPos / float2(screenWidth, screenHeight);
+    //     float4 currentViewPos = lerp(startView, endView, (float)i / maxSteps);
+    //     // Result[id.xy] = float4(screenSpacePos,0,1);
+    //     //return;
+    //     // //Result[id.xy] += color[currentScreenPos];
+    //     // return;
+    //     float currentDepth = mul(UNITY_MATRIX_V,
+    //                              float4(
+    //                                  position[currentScreenPos].xyz,
+    //                                  1)).z;
+    //
+    //     float diff = currentDepth - currentViewPos.z;
+    //     // Result[id.xy] = normals[currentScreenPos].a;
+    //     // break;
+    //
+    //     if (screenSpacePos.x < 0 || screenSpacePos.y < 0 || screenSpacePos.x > 1 || screenSpacePos.y > 1)
+    //     {
+    //         Result[id.xy] = 0;
+    //         break;
+    //     }
+    //     if (diff > 0.0 && diff < objectThickness && normals[currentScreenPos].a > 0)
+    //     {
+    //         //Result[id.xy] = ;
+    //         Result[id.xy] = color[currentScreenPos];
+    //         break;
+    //     }
+    // }
+
+
+    // int maxIter = maxIterations * MADS[id.xy].a;
+    //
+    // float stepSize = reflectionDistance / maxIter;
+    // float3 currentPosition = ray.origin + ray.direction * stepSize;
+    // #if RANDOM_STARTING_POINT
+    //     currentPosition+= ray.direction*abs(nrand(viewSpacePosition.xy))*stepSize;
+    // #endif
+    // float4 screenSpacePos = mul(UNITY_MATRIX_P, float4(currentPosition, 1));
+    // screenSpacePos.xyz /= screenSpacePos.w;
+    // screenSpacePos.xy = screenSpacePos.xy * 0.5 + 0.5;
+    // screenSpacePos.y = 1 - screenSpacePos.y;
+    // for (int i = 0; i < maxIter; i++)
+    // {
+    //     screenSpacePos = mul(UNITY_MATRIX_P, float4(currentPosition, 1));
+    //     screenSpacePos.xyz /= screenSpacePos.w;
+    //     screenSpacePos.xy = screenSpacePos.xy * 0.5 + 0.5;
+    //     screenSpacePos.y = 1 - screenSpacePos.y;
+    //     if (screenSpacePos.x < 0 || screenSpacePos.y < 0 || screenSpacePos.x > 1 || screenSpacePos.y > 1)
+    //     {
+    //         Result[id.xy] += 0;
+    //         break;
+    //     }
+    //     float currentDepth = mul(UNITY_MATRIX_V,
+    //                              float4(
+    //                                  position[screenSpacePos * float2(screenWidth, screenHeight)].xyz,
+    //                                  1)).z;
+    //     float diff = currentDepth - currentPosition.z;
+    //
+    //     if (diff >= 0.0 && abs(diff) < objectThickness)
+    //     {
+    //         float edgeFade =
+    //             saturate(1 - saturate(abs(length(screenSpacePos.xy - 0.5) * 2) - (1 - screenEdgeFade)));
+    //
+    //         Result[id.xy] += color[screenSpacePos * float2(screenWidth, screenHeight)]
+    //             * edgeFade;
+    //
+    //         break;
+    //     }
+    //
+    //     currentPosition += ray.direction * stepSize;
+    //     //stepSize+=0.0025;
+    // }
 }
 
 
@@ -186,6 +433,8 @@ void Merge(uint3 id : SV_DispatchThreadID)
     step/=4;
     #endif
     float roughness = (1 - MADS[id.xy].a) * (1 - MADS[id.xy].a);
-    Result[id.xy] = blur13(coords, step * roughness, reflections) * (1 - roughness)
+    Result[id.xy] = blur(reflections,coords,1+64*roughness) * (1 - roughness)
         + color[id.xy];
+    // Result[id.xy] = reflections[coords] * (1 - roughness)
+    //   + color[id.xy];
 }

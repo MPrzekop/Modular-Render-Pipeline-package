@@ -9,7 +9,7 @@ Material:
   m_PrefabAsset: {fileID: 0}
   m_Name: GBufferMergeMaterial
   m_Shader: {fileID: 4800000, guid: 292632e2b61775245902c6f79ea5530e, type: 3}
-  m_ShaderKeywords: 
+  m_ShaderKeywords: _WORLDSPACENORMALS_ON
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -77,6 +77,7 @@ Material:
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _UVSec: 0
+    - _Worldspacenormals: 1
     - _ZWrite: 1
     - _clearcoat: 0
     - _clearcoatGloss: 0

@@ -21,3 +21,5 @@ MonoBehaviour:
   maxLightsCount: 0
   lightBufferName: LIGHT_BUFFER
   lightCountPropertyName: LIGHT_COUNT
+  customCulling: 0
+  customCuller: {fileID: 0}

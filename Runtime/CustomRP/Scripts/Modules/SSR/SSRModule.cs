@@ -21,10 +21,10 @@ public class SSRModule : RPModule
 
     [SerializeField] private BufferContainer container;
     [SerializeField] private RenderTexture reflectionBuffer, blurBuffer, result;
-    [SerializeField] private int maxIterations;
+    [SerializeField,Range(1,128)] private int maxIterations;
     [Range(0, 1)] [SerializeField] private float screenFade;
     [Range(0, 100)] [SerializeField] private float reflectionDistance;
-    [Range(0.025f, 10)] [SerializeField] private float objectThickness;
+    [Range(0, 1)] [SerializeField] private float objectThickness;
 
     [SerializeField] private bool randomizeStartingPoint;
     [SerializeField] private textureQuality quality;
@@ -48,6 +48,7 @@ public class SSRModule : RPModule
     {
         int texPixelWidth = camera.pixelWidth;
         int texPixelHeight = camera.pixelHeight;
+        CameraRendererUtility.SetupCameraMatrices(camera,buffer,context);
         switch (quality)
         {
             case textureQuality.full:
@@ -119,6 +120,8 @@ public class SSRModule : RPModule
 
         buffer.SetComputeTextureParam(SSRCompute, 0, "Result", reflectionBuffer);
         buffer.DispatchCompute(SSRCompute, 0, texPixelWidth / 8, texPixelHeight / 8, 1);
+        //buffer.Blit(reflectionBuffer, CameraRendererUtility.frameBufferId);
+
         //ExecuteBuffer(context, buffer);
 
         //buffer.Blit(reflectionBuffer, blurBuffer);
@@ -138,9 +141,10 @@ public class SSRModule : RPModule
         buffer.SetComputeTextureParam(SSRCompute, 2, "MADS", container.buffers[2]);
         buffer.SetComputeTextureParam(SSRCompute, 2, "reflections", reflectionBuffer);
         buffer.SetComputeTextureParam(SSRCompute, 2, "Result", result);
+        buffer.SetComputeTextureParam(SSRCompute, 2, "depth", container.depth);
+
         buffer.DispatchCompute(SSRCompute, 2, camera.pixelWidth / 8, camera.pixelHeight / 8, 1);
         buffer.Blit(result, CameraRendererUtility.frameBufferId);
-
         ExecuteBuffer(context, buffer);
 
         // camera.worldToCameraMatrix;

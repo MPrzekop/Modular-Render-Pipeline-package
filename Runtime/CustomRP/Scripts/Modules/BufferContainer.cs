@@ -39,6 +39,7 @@ public class BufferContainer : ScriptableObject
             var rt = RenderTexture.GetTemporary(_camera.pixelWidth, _camera.pixelHeight, 0,
                 GraphicsFormat.R32G32B32A32_SFloat);
             rt.filterMode = FilterMode.Point;
+            
             //rt.Create();
             buffers[i] = rt;
             colors[i] = new RenderTargetIdentifier(rt);

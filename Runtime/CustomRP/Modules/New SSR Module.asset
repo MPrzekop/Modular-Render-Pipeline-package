@@ -28,9 +28,9 @@ MonoBehaviour:
   reflectionBuffer: {fileID: 0}
   blurBuffer: {fileID: 0}
   result: {fileID: 0}
-  maxIterations: 64
+  maxIterations: 20
   screenFade: 0
-  reflectionDistance: 4
-  objectThickness: 0.3
+  reflectionDistance: 12
+  objectThickness: 0.341
   randomizeStartingPoint: 1
-  quality: 1
+  quality: 0

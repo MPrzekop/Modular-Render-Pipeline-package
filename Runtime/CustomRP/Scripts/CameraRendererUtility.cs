@@ -18,7 +18,7 @@ public class CameraRendererUtility
     };
 
     static Material errorMaterial;
-    
+
 
     public static void DrawUnsupportedShaders(Camera camera, ScriptableRenderContext context,
         CullingResults cullingResults)
@@ -105,9 +105,21 @@ public static void StartSample(CommandBuffer buffer)
             cmd.ClearRenderTarget((clearFlag & CameraClearFlags.Depth) != 0, (clearFlag & CameraClearFlags.Color) != 0,
                 clearColor);
     }
+
     public static readonly int frameBufferId = Shader.PropertyToID("_CameraFrameBuffer");
+
     public static readonly int worldToShadowMatrixId =
         Shader.PropertyToID("_WorldToShadowMatrix");
-    public static  readonly int shadowMapId = Shader.PropertyToID("_ShadowMap");
-}
 
+    public static readonly int shadowMapId = Shader.PropertyToID("_ShadowMap");
+
+    public static  void SetupCameraMatrices(Camera c, CommandBuffer buffer, ScriptableRenderContext context)
+    {
+        buffer.SetGlobalMatrix("MY_UNITY_MATRIX_V", c.worldToCameraMatrix);
+        buffer.SetGlobalMatrix("MY_UNITY_MATRIX_P", GL.GetGPUProjectionMatrix(c.projectionMatrix,true));
+        buffer.SetGlobalMatrix("MY_UNITY_MATRIX_I_V", c.worldToCameraMatrix.inverse);
+
+        context.ExecuteCommandBuffer(buffer);
+        buffer.Clear();
+    }
+}
