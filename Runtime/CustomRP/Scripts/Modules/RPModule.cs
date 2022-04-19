@@ -120,6 +120,11 @@ namespace CustomRP
             context.ExecuteCommandBuffer(buffer);
             buffer.Clear();
         }
+        protected void ExecuteBufferAsync(ScriptableRenderContext context, CommandBuffer buffer)
+        {
+            context.ExecuteCommandBufferAsync(buffer,ComputeQueueType.Default);
+            buffer.Clear();
+        }
     }
 
     [System.Serializable]

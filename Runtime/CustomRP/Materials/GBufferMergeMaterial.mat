@@ -79,11 +79,11 @@ Material:
     - _UVSec: 0
     - _Worldspacenormals: 1
     - _ZWrite: 1
-    - _clearcoat: 0
-    - _clearcoatGloss: 0
+    - _clearcoat: 1
+    - _clearcoatGloss: 0.867
     - _sheen: 0
-    - _specular: 0
-    - _subsurface: 0
+    - _specular: 0.009
+    - _subsurface: 0.082
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}

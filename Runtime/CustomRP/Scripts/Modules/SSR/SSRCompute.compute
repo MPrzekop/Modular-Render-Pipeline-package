@@ -166,10 +166,10 @@ float4 res = 0;
         res=0;
         return res;
     }
-   
+   maxIterations+=(1-MADS[id.xy].a)*32;
     for (int i = 0; i < iter; i += maxIterations)
     {
-        currentPixelPos += step * maxIterations;
+      
         //currentPixelPos= ceil(currentPixelPos);
         float2 screenUV = currentPixelPos / float2(screenWidth, screenHeight);
         if (screenUV.x < 0 || screenUV.y < 0 || screenUV.x > 1 || screenUV.y > 1)
@@ -188,6 +188,7 @@ float4 res = 0;
             res = color[currentPixelPos];
             break;
         }
+        currentPixelPos += step * maxIterations;
     }
     if (hit == 0)
     {
@@ -219,7 +220,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     ray.origin = viewSpacePosition;
     Result[id.xy] = 0;
     if((MADS[coords].a)<0.4)return;
-    int maxIter = 1+16*(1-MADS[coords].a);
+    int maxIter = 2+24*(1-MADS[coords].a);
     for(int i = 0;i<maxIter;i++)
     {
         ray.direction = normalize(reflect(cameraRayDirection, lerp((viewSpaceNormals.xyz +
@@ -235,7 +236,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
                                                                    viewSpaceNormals.xyz, MADS[coords].a)));
         //  ray.direction=normalize(reflect(cameraRayDirection, ((viewSpaceNormals.xyz))));
         #if RANDOM_STARTING_POINT
-            ray.origin+= ray.direction*abs(nrand(viewSpacePosition.xy+float2(i,-i)))*0.3f;
+            ray.origin+= ray.direction*abs(nrand(viewSpacePosition.xy+float2(i,-i)))*0.1f;
         #endif
         ray.end = ray.origin + ray.direction * reflectionDistance;
         Result[id.xy]+=GetReflection(ray,id.xy);
